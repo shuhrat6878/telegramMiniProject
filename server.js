@@ -69,13 +69,13 @@ app.delete("/images/:id", async (req, res) => {
     const id = Number(req.params.id);
     let data = await fs.readJson(DATA_PATH);
 
-    const imageToDelete = data.find((item) => item.id === id);
-    if (imageToDelete) {
-      // Cloudinary dan o‘chirish
+    const imageToDelete = data.find(item => item.id === id);
+    if (imageToDelete && imageToDelete.public_id) {
+      console.log("Deleting from Cloudinary:", imageToDelete.public_id);
       await cloudinary.uploader.destroy(imageToDelete.public_id);
     }
 
-    data = data.filter((item) => item.id !== id);
+    data = data.filter(item => item.id !== id);
     await fs.writeJson(DATA_PATH, data, { spaces: 2 });
 
     res.json({ success: true });
