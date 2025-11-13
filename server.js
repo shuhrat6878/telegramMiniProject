@@ -12,9 +12,9 @@ app.use(express.json({ limit: "50mb" }));
 
 // Cloudinary sozlamalari
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.API_KEY,
+  api_secret: process.env.API_SECRET,
 });
 
 // Fayl yo‘qligini tekshirish
@@ -25,14 +25,20 @@ if (!fs.existsSync(DATA_PATH)) {
 
 // 📥 Barcha rasmlarni olish
 app.get("/images", async (req, res) => {
-  const data = await fs.readJson(DATA_PATH);
-  res.json(data);
+  try {
+    const data = await fs.readJson(DATA_PATH);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to read data" });
+  }
 });
 
 // 📤 Yangi rasm yuklash
 app.post("/upload", async (req, res) => {
   try {
     const { base64, title } = req.body;
+
+    // Cloudinary ga yuklash
     const uploadRes = await cloudinary.uploader.upload(base64, {
       folder: "telegramMini",
     });
@@ -41,11 +47,14 @@ app.post("/upload", async (req, res) => {
       id: Date.now(),
       title,
       url: uploadRes.secure_url,
+      public_id: uploadRes.public_id, // Cloudinary o‘chirish uchun
     };
 
     const data = await fs.readJson(DATA_PATH);
     data.push(newImage);
-    await fs.writeJson(DATA_PATH, data);
+
+    // JSON faylni chiroyli saqlash
+    await fs.writeJson(DATA_PATH, data, { spaces: 2 });
 
     res.json({ success: true, newImage });
   } catch (err) {
@@ -56,11 +65,24 @@ app.post("/upload", async (req, res) => {
 
 // 🗑️ Rasmni o‘chirish
 app.delete("/images/:id", async (req, res) => {
-  const id = Number(req.params.id);
-  let data = await fs.readJson(DATA_PATH);
-  data = data.filter((item) => item.id !== id);
-  await fs.writeJson(DATA_PATH, data);
-  res.json({ success: true });
+  try {
+    const id = Number(req.params.id);
+    let data = await fs.readJson(DATA_PATH);
+
+    const imageToDelete = data.find((item) => item.id === id);
+    if (imageToDelete) {
+      // Cloudinary dan o‘chirish
+      await cloudinary.uploader.destroy(imageToDelete.public_id);
+    }
+
+    data = data.filter((item) => item.id !== id);
+    await fs.writeJson(DATA_PATH, data, { spaces: 2 });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Delete failed" });
+  }
 });
 
 const PORT = process.env.PORT || 5000;
